@@ -1,0 +1,439 @@
+{
+  "info": {
+    "name": "restful-booker 接口自动化（qa-practice）",
+    "description": "软件测试实习练习：接口用例 + 断言脚本 + 反向用例。使用方法见 03-api-tests/assertions.md",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://restful-booker.herokuapp.com" },
+    { "key": "token", "value": "" },
+    { "key": "bookingId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 正常主流程（应全部通过）",
+      "item": [
+        {
+          "name": "01-Ping 健康检查",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/ping", "host": ["{{baseUrl}}"], "path": ["ping"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('响应体应为 Created', function () { pm.expect(pm.response.text()).to.eql('Created'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02-获取 token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"password123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/auth", "host": ["{{baseUrl}}"], "path": ["auth"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('响应体应包含 token 字段', function () { pm.expect(pm.response.json()).to.have.property('token'); });",
+                  "pm.test('token 应为 15 位字符串', function () { pm.expect(pm.response.json().token).to.be.a('string').and.have.lengthOf(15); });",
+                  "if (pm.response.json().token) { pm.collectionVariables.set('token', pm.response.json().token); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03-创建订单",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Jing\",\n  \"lastname\": \"Hu\",\n  \"totalprice\": 120,\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-11-20\",\n    \"checkout\": \"2026-11-22\"\n  },\n  \"additionalneeds\": \"breakfast\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking", "host": ["{{baseUrl}}"], "path": ["booking"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('应返回 bookingid 且为数字', function () { pm.expect(pm.response.json().bookingid).to.be.a('number'); });",
+                  "pm.test('firstname 应原样回显', function () { pm.expect(pm.response.json().booking.firstname).to.eql('Jing'); });",
+                  "pm.test('totalprice 应为数字', function () { pm.expect(pm.response.json().booking.totalprice).to.be.a('number'); });",
+                  "pm.test('bookingdates 应为两层嵌套结构', function () { pm.expect(pm.response.json().booking.bookingdates).to.have.property('checkin'); });",
+                  "if (pm.response.json().bookingid) { pm.collectionVariables.set('bookingId', pm.response.json().bookingid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04-查询全部订单",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/booking", "host": ["{{baseUrl}}"], "path": ["booking"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('响应体应为数组', function () { pm.expect(pm.response.json()).to.be.an('array'); });",
+                  "pm.test('数组元素应含 bookingid 且为数字', function () { pm.expect(pm.response.json()[0].bookingid).to.be.a('number'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05-查询单条订单（使用上一步的 id）",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('应返回 firstname', function () { pm.expect(pm.response.json()).to.have.property('firstname'); });",
+                  "pm.test('checkin 应为字符串日期', function () { pm.expect(pm.response.json().bookingdates.checkin).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06-携带 token 更新订单",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Cookie", "value": "token={{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Jing\",\n  \"lastname\": \"Hu\",\n  \"totalprice\": 999,\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-11-20\",\n    \"checkout\": \"2026-11-22\"\n  },\n  \"additionalneeds\": \"lunch\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('totalprice 应更新为 999', function () { pm.expect(pm.response.json().totalprice).to.eql(999); });",
+                  "pm.test('additionalneeds 应更新为 lunch', function () { pm.expect(pm.response.json().additionalneeds).to.eql('lunch'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07-删除订单",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Cookie", "value": "token={{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码应为 201（该站删除成功的实际约定）', function () { pm.response.to.have.status(201); });",
+                  "pm.test('删除后不应再有订单数据', function () { pm.expect(pm.response.text()).to.eql('Created'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08-删除后查询该订单（应为 404）",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('删除后查询应返回 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 反向用例与鉴权（部分预期失败，对应已知缺陷）",
+      "item": [
+        {
+          "name": "09-创建临时订单（供反向用例使用）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Neg\",\n  \"lastname\": \"Case\",\n  \"totalprice\": 50,\n  \"depositpaid\": false,\n  \"bookingdates\": {\n    \"checkin\": \"2026-12-01\",\n    \"checkout\": \"2026-12-02\"\n  },\n  \"additionalneeds\": \"none\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking", "host": ["{{baseUrl}}"], "path": ["booking"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('前置数据创建成功（状态码 200）', function () { pm.response.to.have.status(200); });",
+                  "if (pm.response.json().bookingid) { pm.collectionVariables.set('bookingId', pm.response.json().bookingid); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10-不带 token 更新订单（应 403）",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Hack\",\n  \"lastname\": \"Attempt\",\n  \"totalprice\": 1,\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-12-01\",\n    \"checkout\": \"2026-12-02\"\n  },\n  \"additionalneeds\": \"x\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('未携带凭证应被拒绝（403）', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11-使用伪造 token 更新订单（应 403）",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Cookie", "value": "token=abc123" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Hack\",\n  \"lastname\": \"Attempt\",\n  \"totalprice\": 1,\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-12-01\",\n    \"checkout\": \"2026-12-02\"\n  },\n  \"additionalneeds\": \"x\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('伪造的 token 应被拒绝（403）', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12-参数校验：totalprice 传字符串（应 400）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Bad\",\n  \"lastname\": \"Price\",\n  \"totalprice\": \"abc\",\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-11-20\",\n    \"checkout\": \"2026-11-22\"\n  },\n  \"additionalneeds\": \"x\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking", "host": ["{{baseUrl}}"], "path": ["booking"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// BUG-002：实测返回 200 并把 totalprice 存成 null，因此本断言会失败，属预期失败",
+                  "pm.test('非法金额应返回 400（当前实现未校验，失败即复现 BUG-002）', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13-参数校验：非法日期（应 400）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstname\": \"Bad\",\n  \"lastname\": \"Date\",\n  \"totalprice\": 120,\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-13-45\",\n    \"checkout\": \"2026-11-22\"\n  },\n  \"additionalneeds\": \"x\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking", "host": ["{{baseUrl}}"], "path": ["booking"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// BUG-002：实测返回 200 并把日期存成 0NaN-aN-aN，因此本断言会失败，属预期失败",
+                  "pm.test('非法日期应返回 400（当前实现未校验，失败即复现 BUG-002）', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14-参数校验：缺失 firstname（应 400）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lastname\": \"Hu\",\n  \"totalprice\": 120,\n  \"depositpaid\": true,\n  \"bookingdates\": {\n    \"checkin\": \"2026-11-20\",\n    \"checkout\": \"2026-11-22\"\n  },\n  \"additionalneeds\": \"x\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/booking", "host": ["{{baseUrl}}"], "path": ["booking"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// BUG-002：实测返回 500，因此本断言会失败，属预期失败",
+                  "pm.test('缺失必填字段应返回 400（当前返回 500，失败即复现 BUG-002）', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15-清理：删除临时订单（应 201）",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Cookie", "value": "token={{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('删除应成功（201）', function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "16-重复删除同一订单（应 404，实际 405）",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Cookie", "value": "token={{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/booking/{{bookingId}}", "host": ["{{baseUrl}}"], "path": ["booking", "{{bookingId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 实测返回 405，与 404 语义不符，故本断言失败属预期失败",
+                  "pm.test('重复删除应返回 404（当前返回 405，失败即复现缺陷）', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
