@@ -28,9 +28,45 @@
 **4. 反向用例的价值：查不到时必须报 404。**
 `/booking/999999` 返回 404 而不是「200 + 空数组」或「200 + null」，说明错误的表达是明确的。如果它返回 200 配空对象，前端会把「不存在」当成「有一条空数据」，用户看到的是空白详情页而不是「订单不存在」——这类问题用户很难描述清楚，只有接口层能抓到。
 
+## 第二组：认证与写操作
+
+| 编号 | 用例标题 | 方法 | 接口地址 | 预期结果 | 实测结果 | 结论 |
+|---|---|---|---|---|---|---|
+| API-005 | 使用正确账号获取 token | POST | `/auth` | 状态码 200，响应体含 `token` 字段（约 15 位字符） | 200，返回 `{"token":"c970cb51db0b54e"}` | 通过 |
+| API-006 | 创建订单 | POST | `/booking` | 状态码 200，响应体含 `bookingid` 与完整 booking 对象 | 200，返回 `bookingid: 4183` 及全部字段 | 通过 |
+| API-007 | 携带有效 token 更新订单 | PUT | `/booking/{id}` | 状态码 200，响应体返回更新后的完整订单 | 200，`totalprice` 由 120 变为 999，`additionalneeds` 变为 `lunch` | 通过 |
+| API-008 | 不带 token 更新订单（反向） | PUT | `/booking/{id}` | 状态码 403，不返回任何订单数据，响应体仅 `Forbidden` | 403，Body 为 `Forbidden` | 通过 |
+| API-009 | 用 Authorization: Bearer 传递同一 token（反向） | PUT | `/booking/{id}` | 应被拒绝 | 403 | 通过（服务端只认 Cookie） |
+| API-010 | 使用伪造 token 更新订单（反向） | PUT | `/booking/{id}` | 状态码 403 | 403 | 通过 |
+
+## 第二组实测发现
+
+**1. token 只能放在 `Cookie` 头里，放 `Authorization: Bearer` 一律 403。**
+同一个有效 token，`Cookie: token=<值>` 返回 200，`Authorization: Bearer <值>` 返回 403。说明服务端只实现了 Cookie 这一条路径。
+影响：如果前端按主流规范（Bearer）对接，接口会静默拒绝；对接时必须以文档为准，不能凭经验猜认证方式。
+
+**2. 403 无法区分「没带凭证」「凭证过期」「凭证是假的」。**
+三种完全不同的原因返回同一个状态码和同一句 `Forbidden`。真实业务系统中的规范做法是：未携带或凭证无效返回 **401 Unauthorized**（需要认证），已认证但无权限返回 **403 Forbidden**（认证通过但没权限）。此处混用会导致前端无法给出正确引导（该跳登录页，还是该提示无权限），也会让联调时排查困难。可作为**接口规范改进建议**提出，严重程度「轻微」。
+
+**3. 缺少 `Accept` 头时，服务端返回 418 I'm a Teapot。**
+不带 `Accept: application/json` 调用 `POST /booking`，返回 **418**（而不是 400 参数错误）。418 是玩笑状态码，不属于 HTTP 业务语义。
+影响：客户端无法根据状态码判断是“我的请求缺了什么”，只能盲猜。属于错误表达不规范，可作为改进建议提出。
+
+**4. token 有效期很短，且共享测试环境的数据会被他人改动。**
+- 手工复制 token 后若间隔过久，会因过期而 403。判断方法是：换一个新 token 立刻变 200 → 说明请求没问题，是凭证失效。
+- 练习站是公共环境，本人创建的 `bookingid 4183` 在短时间内被他人删除，再次 PUT 返回 **405 Method Not Allowed**。
+
+这两点指向同一件事：**测试数据必须自己造、自己清理、不依赖别人的数据**。接口测试不能预设“这条数据一定在”，前置条件要么显式创建，要么用接口查出来再操作。
+
+**5. 工具的自动建议不能替代接口文档。**
+Postman 检测到 `Cookie` 认证后弹出建议：改用 `Authorization: Bearer`，并提供一键 `Fix`。采纳后原本正确的 Cookie 被清空，请求变成 403。**自动修复基于通用猜测，不读接口文档；接口测试的判断依据永远是服务端文档与实际响应。**
+
 ## 待补充（下一组）
 
-- `POST /booking` 创建订单（需 `Content-Type: application/json`）
-- `POST /auth` 获取 token（体 `{"username":"admin","password":"password123"}`）
-- 带 token 的 `PUT` / `DELETE`，以及**不带 token 时应当返回 403**
-- 参数校验类：`POST /booking` 缺 `firstname`、`totalprice` 传字符串、`checkin` 格式非法，观察是否返回 400
+- `DELETE /booking/{id}`：删除成功应返回 201，删除不存在的 id 应返回 404
+- 参数校验类（重点）：
+  - `POST /booking` 缺 `firstname` → 期望 400，实际观察返回什么
+  - `totalprice` 传字符串 `"abc"` → 期望 400，实际观察
+  - `bookingdates.checkin` 传 `2026-13-45` 这种非法日期 → 期望 400，实际观察
+  - Body 传空对象 `{}` → 期望 400
+- 把以上请求写成 Postman 断言脚本（Tests + `pm.expect`），用 Collection Runner 批量执行
