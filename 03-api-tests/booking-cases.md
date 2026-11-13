@@ -61,6 +61,18 @@
 **5. 工具的自动建议不能替代接口文档。**
 Postman 检测到 `Cookie` 认证后弹出建议：改用 `Authorization: Bearer`，并提供一键 `Fix`。采纳后原本正确的 Cookie 被清空，请求变成 403。**自动修复基于通用猜测，不读接口文档；接口测试的判断依据永远是服务端文档与实际响应。**
 
+## 第三组：参数校验（反向用例）
+
+| 编号 | 用例标题 | 方法 | 请求体 | 预期 | 实测 | 结论 |
+|---|---|---|---|---|---|---|
+| API-011 | `totalprice` 传字符串 | POST | `"totalprice":"abc"` | 400，拒绝创建 | **200，创建成功，`totalprice` 存为 `null`** | **不通过 → BUG-002** |
+| API-012 | `checkin` 传非法日期 | POST | `"checkin":"2026-13-45"` | 400，拒绝创建 | **200，创建成功，日期存为 `0NaN-aN-aN`** | **不通过 → BUG-002** |
+| API-013 | 缺失 `firstname` | POST | 无 `firstname` 字段 | 400，提示缺失字段 | 500 Internal Server Error | **不通过 → BUG-002** |
+| API-014 | Body 传空对象 | POST | `{}` | 400，提示缺失字段 | 500 Internal Server Error | **不通过 → BUG-002** |
+| API-015 | 缺失 `bookingdates` | POST | 无 `bookingdates` 字段 | 400，提示缺失字段 | 500 Internal Server Error | **不通过 → BUG-002** |
+
+对应缺陷单：`02-bug-reports/BUG-002-订单创建缺少参数校验.md`
+
 ## 待补充（下一组）
 
 - `DELETE /booking/{id}`：删除成功应返回 201，删除不存在的 id 应返回 404
